@@ -2,24 +2,39 @@
 Simple lanchain chroma db reference
 
 ```java
-@Configuration
-public class SubAppConfig {
+import feign.Feign;
+import feign.jackson.JacksonDecoder;
+import feign.slf4j.Slf4jLogger;
 
-    @Value("${subapps.list}")
-    private String subAppList;
+@Service
+public class FeignDynamicPostService {
 
-    @Autowired
-    private Environment env;
+    private final SubAppConfig subAppConfig;
 
-    public Map<String, String> getSubAppUrls() {
-        Map<String, String> urlMap = new HashMap<>();
-        for (String app : subAppList.split(",")) {
-            String url = env.getProperty(app + ".url");
-            if (url != null) {
-                urlMap.put(app, url);
+    public FeignDynamicPostService(SubAppConfig subAppConfig) {
+        this.subAppConfig = subAppConfig;
+    }
+
+    public List<Post> getAllPosts() {
+        List<Post> result = new ArrayList<>();
+
+        Map<String, String> subAppUrls = subAppConfig.getSubAppUrls();
+        for (Map.Entry<String, String> entry : subAppUrls.entrySet()) {
+            try {
+                PostClient client = Feign.builder()
+                    .decoder(new JacksonDecoder())
+                    .logger(new Slf4jLogger(PostClient.class))
+                    .logLevel(feign.Logger.Level.BASIC)
+                    .target(PostClient.class, entry.getValue());
+
+                List<Post> posts = client.getPosts();
+                result.addAll(posts);
+            } catch (Exception e) {
+                System.err.println("Failed to fetch from: " + entry.getKey() + " → " + e.getMessage());
             }
         }
-        return urlMap;
+
+        return result;
     }
 }
 ```
