@@ -39,36 +39,9 @@ public class FeignDynamicPostService {
 }
 ```
 
-```java
-@Service
-public class DynamicPostAggregatorService {
-
-    private final RestTemplate restTemplate;
-    private final SubAppConfig subAppConfig;
-
-    public DynamicPostAggregatorService(RestTemplateBuilder builder, SubAppConfig subAppConfig) {
-        this.restTemplate = builder.build();
-        this.subAppConfig = subAppConfig;
-    }
-
-    public List<Post> getAllPosts() {
-        List<Post> allPosts = new ArrayList<>();
-        Map<String, String> subAppUrls = subAppConfig.getSubAppUrls();
-
-        for (Map.Entry<String, String> entry : subAppUrls.entrySet()) {
-            String baseUrl = entry.getValue();
-            try {
-                ResponseEntity<Post[]> response = restTemplate.getForEntity(baseUrl + "/posts", Post[].class);
-                if (response.getStatusCode().is2xxSuccessful()) {
-                    allPosts.addAll(Arrays.asList(response.getBody()));
-                }
-            } catch (Exception e) {
-                System.err.println("Error calling " + entry.getKey() + ": " + e.getMessage());
-                // Optionally log or track failed services
-            }
-        }
-
-        return allPosts;
-    }
-}
+```xml
+<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-openfeign</artifactId>
+		</dependency>
 ```
