@@ -1,6 +1,70 @@
 # Langchain-Reference
 Simple lanchain chroma db reference
 
+
+```java
+import feign.Response;
+import feign.codec.Decoder;
+import feign.FeignException;
+import feign.Util;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
+
+public class JsonThenStringDecoder implements Decoder {
+
+    private final Decoder jsonDecoder;
+    private final Decoder stringDecoder;
+
+    public JsonThenStringDecoder(ObjectMapper objectMapper) {
+        this.jsonDecoder = new feign.jackson.JacksonDecoder(objectMapper);
+        this.stringDecoder = (response, type) -> Util.toString(response.body().asReader(StandardCharsets.UTF_8));
+    }
+
+    @Override
+    public Object decode(Response response, Type type) throws IOException, FeignException {
+        String body = Util.toString(response.body().asReader(StandardCharsets.UTF_8));
+
+        if (body == null || body.trim().isEmpty()) {
+            return null;
+        }
+
+        // Attempt JSON parse first
+        try {
+            return jsonDecoder.decode(
+                Response.builder()
+                        .status(response.status())
+                        .headers(response.headers())
+                        .reason(response.reason())
+                        .request(response.request())
+                        .body(body, StandardCharsets.UTF_8)
+                        .build(),
+                type
+            );
+        } catch (Exception jsonFail) {
+            // Fall back to string (or string[] or whatever is appropriate)
+            if (type == String.class) {
+                return body;
+            } else if (type == String[].class) {
+                return new String[] { body };
+            } else if (type.getTypeName().contains("List") || type.getTypeName().contains("java.util")) {
+                return java.util.Collections.emptyList();
+            }
+
+            throw new FeignException.FeignClientException(
+                response.status(),
+                "Cannot decode as JSON or fallback for type: " + type.getTypeName() + ", response: " + body,
+                response.request(),
+                response.body().asInputStream()
+            );
+        }
+    }
+}
+
+```
+
 ```java
 @Configuration
 public class FeignClientRegistrar {
