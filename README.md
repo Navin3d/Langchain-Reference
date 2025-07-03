@@ -35,6 +35,13 @@ public class FeignClientRegistrar {
 
 ```xml
 <dependency>
+  <groupId>io.github.openfeign</groupId>
+  <artifactId>feign-jackson</artifactId>
+  <version>12.4</version> <!-- or latest -->
+</dependency>
+
+
+<dependency>
 			<groupId>org.springframework.cloud</groupId>
 			<artifactId>spring-cloud-starter-openfeign</artifactId>
 		</dependency>
