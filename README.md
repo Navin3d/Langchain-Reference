@@ -17,66 +17,51 @@ public class WebConfig implements WebMvcConfigurer {
 
 
 ```java
-import feign.Response;
-import feign.codec.Decoder;
-import feign.FeignException;
-import feign.Util;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
+import org.springframework.web.client.RestTemplate;
 
-import java.io.IOException;
-import java.lang.reflect.Type;
-import java.nio.charset.StandardCharsets;
+import javax.net.ssl.SSLContext;
+import java.io.FileInputStream;
+import java.security.KeyStore;
 
-public class JsonThenStringDecoder implements Decoder {
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.ssl.SSLContexts;
 
-    private final Decoder jsonDecoder;
-    private final Decoder stringDecoder;
+@Configuration
+public class SslRestTemplateConfig {
 
-    public JsonThenStringDecoder(ObjectMapper objectMapper) {
-        this.jsonDecoder = new feign.jackson.JacksonDecoder(objectMapper);
-        this.stringDecoder = (response, type) -> Util.toString(response.body().asReader(StandardCharsets.UTF_8));
-    }
+    @Bean
+    public RestTemplate restTemplate() throws Exception {
+        // Load the truststore
+        KeyStore trustStore = KeyStore.getInstance("PKCS12");
+        FileInputStream trustStoreStream = new FileInputStream("src/main/resources/my-truststore.p12");
+        trustStore.load(trustStoreStream, "changeit".toCharArray());
 
-    @Override
-    public Object decode(Response response, Type type) throws IOException, FeignException {
-        String body = Util.toString(response.body().asReader(StandardCharsets.UTF_8));
+        // Create SSL context
+        SSLContext sslContext = SSLContexts.custom()
+                .loadTrustMaterial(trustStore, null) // No need for password if just trusting
+                .build();
 
-        if (body == null || body.trim().isEmpty()) {
-            return null;
-        }
+        // Create socket factory with the SSL context
+        SSLConnectionSocketFactory socketFactory =
+                new SSLConnectionSocketFactory(sslContext);
 
-        // Attempt JSON parse first
-        try {
-            return jsonDecoder.decode(
-                Response.builder()
-                        .status(response.status())
-                        .headers(response.headers())
-                        .reason(response.reason())
-                        .request(response.request())
-                        .body(body, StandardCharsets.UTF_8)
-                        .build(),
-                type
-            );
-        } catch (Exception jsonFail) {
-            // Fall back to string (or string[] or whatever is appropriate)
-            if (type == String.class) {
-                return body;
-            } else if (type == String[].class) {
-                return new String[] { body };
-            } else if (type.getTypeName().contains("List") || type.getTypeName().contains("java.util")) {
-                return java.util.Collections.emptyList();
-            }
+        // Create HttpClient with custom SSL config
+        CloseableHttpClient httpClient = HttpClients.custom()
+                .setSSLSocketFactory(socketFactory)
+                .build();
 
-            throw new FeignException.FeignClientException(
-                response.status(),
-                "Cannot decode as JSON or fallback for type: " + type.getTypeName() + ", response: " + body,
-                response.request(),
-                response.body().asInputStream()
-            );
-        }
+        // Create request factory with custom HttpClient
+        HttpComponentsClientHttpRequestFactory factory =
+                new HttpComponentsClientHttpRequestFactory(httpClient);
+
+        return new RestTemplate(factory);
     }
 }
-
 ```
 
 ```java
