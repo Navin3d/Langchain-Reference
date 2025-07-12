@@ -1,68 +1,67 @@
 # Langchain-Reference
 Simple lanchain chroma db reference
 
-
 ```java
-import feign.Response;
-import feign.codec.Decoder;
-import feign.FeignException;
-import feign.Util;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import java.io.IOException;
-import java.lang.reflect.Type;
-import java.nio.charset.StandardCharsets;
-
-public class JsonThenStringDecoder implements Decoder {
-
-    private final Decoder jsonDecoder;
-    private final Decoder stringDecoder;
-
-    public JsonThenStringDecoder(ObjectMapper objectMapper) {
-        this.jsonDecoder = new feign.jackson.JacksonDecoder(objectMapper);
-        this.stringDecoder = (response, type) -> Util.toString(response.body().asReader(StandardCharsets.UTF_8));
-    }
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
 
     @Override
-    public Object decode(Response response, Type type) throws IOException, FeignException {
-        String body = Util.toString(response.body().asReader(StandardCharsets.UTF_8));
-
-        if (body == null || body.trim().isEmpty()) {
-            return null;
-        }
-
-        // Attempt JSON parse first
-        try {
-            return jsonDecoder.decode(
-                Response.builder()
-                        .status(response.status())
-                        .headers(response.headers())
-                        .reason(response.reason())
-                        .request(response.request())
-                        .body(body, StandardCharsets.UTF_8)
-                        .build(),
-                type
-            );
-        } catch (Exception jsonFail) {
-            // Fall back to string (or string[] or whatever is appropriate)
-            if (type == String.class) {
-                return body;
-            } else if (type == String[].class) {
-                return new String[] { body };
-            } else if (type.getTypeName().contains("List") || type.getTypeName().contains("java.util")) {
-                return java.util.Collections.emptyList();
-            }
-
-            throw new FeignException.FeignClientException(
-                response.status(),
-                "Cannot decode as JSON or fallback for type: " + type.getTypeName() + ", response: " + body,
-                response.request(),
-                response.body().asInputStream()
-            );
-        }
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/**")
+                .allowedOrigins("http://localhost:3000")
+                .allowedMethods("GET", "POST", "PUT", "DELETE")
+                .allowedHeaders("*");
     }
 }
+```
 
+
+```java
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
+import org.springframework.web.client.RestTemplate;
+
+import javax.net.ssl.SSLContext;
+import java.io.FileInputStream;
+import java.security.KeyStore;
+
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.ssl.SSLContexts;
+
+@Configuration
+public class SslRestTemplateConfig {
+
+    @Bean
+    public RestTemplate restTemplate() throws Exception {
+        // Load the truststore
+        KeyStore trustStore = KeyStore.getInstance("PKCS12");
+        FileInputStream trustStoreStream = new FileInputStream("src/main/resources/my-truststore.p12");
+        trustStore.load(trustStoreStream, "changeit".toCharArray());
+
+        // Create SSL context
+        SSLContext sslContext = SSLContexts.custom()
+                .loadTrustMaterial(trustStore, null) // No need for password if just trusting
+                .build();
+
+        // Create socket factory with the SSL context
+        SSLConnectionSocketFactory socketFactory =
+                new SSLConnectionSocketFactory(sslContext);
+
+        // Create HttpClient with custom SSL config
+        CloseableHttpClient httpClient = HttpClients.custom()
+                .setSSLSocketFactory(socketFactory)
+                .build();
+
+        // Create request factory with custom HttpClient
+        HttpComponentsClientHttpRequestFactory factory =
+                new HttpComponentsClientHttpRequestFactory(httpClient);
+
+        return new RestTemplate(factory);
+    }
+}
 ```
 
 ```java
