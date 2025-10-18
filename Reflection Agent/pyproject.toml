@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "Reflection Agent"
+version = "0.1.0"
+description = ""
+authors = ["Navin3d"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+python-dotenv = "^1.1.1"
+isort = "^7.0.0"
+langchain = "^1.0.0"
+langchain-ollama = "^1.0.0"
+langgraph = "^1.0.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
